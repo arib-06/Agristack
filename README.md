@@ -1,2 +1,22 @@
-# Agristack
-Satellite driven crop intelligence and irrigation optimization platform combining ML based yield prediction, crop health monitoring, weather/soil data, and optimization powered irrigation scheduling.
+# AGRISTACK
+
+Satellite-Driven Crop Intelligence & Irrigation Optimization
+
+## Objective
+Build an AI-powered agricultural platform that:
+- predicts crop yield
+- estimates crop water requirements
+- detects crop health using satellite data
+- optimizes irrigation schedules
+
+## Initial Scope
+Region: Punjab, India
+Granularity: District-level
+
+## Tech Stack
+Python
+Pandas / NumPy
+Scikit-learn
+PostgreSQL / Supabase
+FastAPI
+Next.js
