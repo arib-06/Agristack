@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data – never commit raw/processed data
+data/raw/*
+data/processed/*
+!data/raw/ndvi/.gitkeep
+!data/raw/soil/.gitkeep
+!data/raw/weather/.gitkeep
+
+# Models – don't commit large binaries
+models/saved/*
+models/artifacts/*
+
+# Logs
+logs/
+*.log
+
+# Secrets
+.env
+config/gee_credentials.json
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
