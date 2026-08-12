@@ -15,6 +15,16 @@ latitude = data["results"][0]["latitude"]
 longitude = data["results"][0]["longitude"]
 weather_params = {
     "latitude": latitude,
-    "longitude": longitude
+    "longitude": longitude,
+    "hourly": "temperature_2m"
 }
 weather_response = requests.get(url, params=weather_params)
+print(weather_response.status_code)
+print(weather_response.text)
+weather_data = weather_response.json()#got converted into a python dic
+temperatures = weather_data["hourly"]["temperature_2m"]#nested dic access
+times = weather_data["hourly"]["time"]
+for time, temperature in zip(times, temperatures): #zip attaches them together
+    print(time, temperature)#sync temp and times data together
+# for i in range(len(times)):
+#     print(times[i], temperatures[i])
