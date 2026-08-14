@@ -1,5 +1,6 @@
 ## `open meteo
 
+import json
 import requests
 import pandas as pd
 from pathlib import Path
@@ -54,7 +55,6 @@ print(weather_response.text)
 
 
 weather_data = weather_response.json()  # got converted into a python dic
-import json
 
 with open(WEATHER_DIR / "weather_raw.json", "w") as f:
     json.dump(weather_data, f, indent=4)
