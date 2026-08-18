@@ -20,6 +20,7 @@ NDVI_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(BASE_DIR))
 
 from config.location import get_coordinates
+from config.analysis import START_DATE, END_DATE
 
 
 
@@ -62,10 +63,6 @@ if __name__ == "__main__":
     
     # Filter Sentinel-2 data
    
-    # Date range for our first test.
-    # End date is exclusive in Earth Engine.
-    START_DATE = "2026-07-01"
-    END_DATE = "2026-08-01"
 
     sentinel2_filtered = (
         sentinel2
