@@ -3,74 +3,116 @@ import pandas as pd
 import sys
 from pathlib import Path
 
-# Project paths
+# Repository root
 
-# Repo root = one level up from src/
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# NDVI output directory
 
 NDVI_DIR = BASE_DIR / "data" / "raw" / "ndvi"
 NDVI_DIR.mkdir(parents=True, exist_ok=True)
 
+# Add repository root to Python path
 
-
-# Import shared location resolver
-
-# config/ lives at the repo root, so add the repo root
-# to Python's import path.
 sys.path.insert(0, str(BASE_DIR))
 
 from config.location import get_coordinates
 from config.analysis import START_DATE, END_DATE
 
 
-
-# Main NDVI pipeline
-
-
 if __name__ == "__main__":
 
-    # Initialize Earth Engine using our registered project
+    # Initialize Google Earth Engine
+
     ee.Initialize(project="fiery-set-472410-j6")
 
-    # Temporary test location.
-    # Later this will come from the user/application.
+    # Temporary test location
+
+    # Later this will come from the application or user
+
     city = "Ludhiana"
 
     # Convert city name into latitude and longitude
+
     latitude, longitude = get_coordinates(city)
 
     print(f"Location: {city}")
     print(f"Latitude: {latitude}")
     print(f"Longitude: {longitude}")
 
+    # Earth Engine coordinates use [longitude, latitude]
 
-    # Create Earth Engine geometry
-    
-    # Earth Engine coordinates use:
-    # [longitude, latitude]
-    location = ee.Geometry.Point([longitude, latitude])
+    location = ee.Geometry.Point([
+        longitude,
+        latitude
+    ])
 
-
-    
-    # Load Sentinel-2 collection
-    
+    # Load Sentinel-2 Surface Reflectance collection
 
     sentinel2 = ee.ImageCollection(
         "COPERNICUS/S2_SR_HARMONIZED"
     )
 
+    # Filter images by location and date
 
-    
-    # Filter Sentinel-2 data
-   
-
-    sentinel2_filtered = (
+    sentinel2_location_date = (
         sentinel2
         .filterBounds(location)
         .filterDate(START_DATE, END_DATE)
+    )
 
-        # Keep scenes with less than 20% cloud coverage.
-        # This is a scene-level pre-filter.
+    # Convert the ImageCollection into a list
+
+    sentinel2_list = sentinel2_location_date.toList(
+        sentinel2_location_date.size()
+    )
+
+    # Print information about every Sentinel-2 scene
+
+    print("\nAll Sentinel-2 scenes:")
+
+    for i in range(
+        sentinel2_location_date.size().getInfo()
+    ):
+
+        image = ee.Image(
+            sentinel2_list.get(i)
+        )
+
+        # Get image date
+
+        date = image.date().format(
+            "YYYY-MM-dd"
+        ).getInfo()
+
+        # Get scene-level cloud percentage
+
+        cloud = image.get(
+            "CLOUDY_PIXEL_PERCENTAGE"
+        ).getInfo()
+
+        # Get unique Sentinel-2 image ID
+
+        image_id = image.id().getInfo()
+
+        print(
+            f"{date} | "
+            f"Cloud: {cloud:.2f}% | "
+            f"Image: {image_id}"
+        )
+
+    # Count images before cloud filtering
+
+    before_cloud_count = (
+        sentinel2_location_date
+        .size()
+        .getInfo()
+    )
+
+    # Filter images using scene-level cloud percentage
+
+    sentinel2_filtered = (
+        sentinel2_location_date
         .filter(
             ee.Filter.lt(
                 "CLOUDY_PIXEL_PERCENTAGE",
@@ -79,35 +121,45 @@ if __name__ == "__main__":
         )
     )
 
+    # Count images after cloud filtering
 
-    
-    # Check how many images remain
-   
+    after_cloud_count = (
+        sentinel2_filtered
+        .size()
+        .getInfo()
+    )
+
+    print(
+        f"Sentinel-2 images before cloud filtering: "
+        f"{before_cloud_count}"
+    )
+
+    print(
+        f"Sentinel-2 images after cloud filtering: "
+        f"{after_cloud_count}"
+    )
+
+    # Check how many images remain after filtering
+
     image_count = sentinel2_filtered.size().getInfo()
 
     print(
-        f"Sentinel-2 images after filtering: {image_count}"
+        f"Sentinel-2 images after filtering: "
+        f"{image_count}"
     )
 
-
-    
-    # Calculate NDVI for each image
-   
+    # Calculate NDVI for each Sentinel-2 image
 
     def calculate_ndvi(image):
 
-        # NDVI = (NIR - RED) / (NIR + RED)
-        #
-        # Sentinel-2:
-        # B8 = NIR
-        # B4 = RED
+        # B8 is Near Infrared and B4 is Red
 
         ndvi = image.normalizedDifference(
             ["B8", "B4"]
         ).rename("NDVI")
 
+        # Extract the mean NDVI value at our location
 
-        # Extract the NDVI value at our location
         ndvi_value = ndvi.reduceRegion(
             reducer=ee.Reducer.mean(),
             geometry=location,
@@ -115,13 +167,14 @@ if __name__ == "__main__":
             bestEffort=True
         ).get("NDVI")
 
+        # Store the result as an Earth Engine Feature
 
-        # Convert the result into a Feature
-        # so we can eventually create a table.
         return ee.Feature(
             None,
             {
-                "date": image.date().format("YYYY-MM-dd"),
+                "date": image.date().format(
+                    "YYYY-MM-dd"
+                ),
                 "ndvi": ndvi_value,
                 "cloud_percentage": image.get(
                     "CLOUDY_PIXEL_PERCENTAGE"
@@ -130,31 +183,23 @@ if __name__ == "__main__":
             }
         )
 
+    # Apply the NDVI calculation to every image
 
-    # Apply our NDVI function to every image
     ndvi_features = sentinel2_filtered.map(
         calculate_ndvi
     )
 
-
-    
-    # Remove observations where NDVI is unavailable
-   
+    # Remove observations where NDVI could not be calculated
 
     ndvi_features = ndvi_features.filter(
         ee.Filter.notNull(["ndvi"])
     )
 
+    # Bring the small tabular result from Earth Engine into Python
 
-    
-    # Bring the small tabular result back to Python
-    
     ndvi_data = ndvi_features.getInfo()
 
-
-   
-    # Convert Earth Engine result into Pandas
-    
+    # Convert Earth Engine features into Pandas rows
 
     rows = []
 
@@ -171,13 +216,9 @@ if __name__ == "__main__":
             "image_id": properties["image_id"]
         })
 
-
     ndvi_df = pd.DataFrame(rows)
 
-
-    
-    # Save raw NDVI result
-    
+    # Save NDVI data
 
     output_file = NDVI_DIR / "ndvi.csv"
 
@@ -186,10 +227,8 @@ if __name__ == "__main__":
         index=False
     )
 
+    # Validate the resulting dataset
 
-   
-    # Basic validation
-    
     print("\nNDVI data:")
     print(ndvi_df)
 
