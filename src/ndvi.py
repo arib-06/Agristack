@@ -1,6 +1,9 @@
 import ee
+
 import pandas as pd
+
 import sys
+
 from pathlib import Path
 
 # Repository root
@@ -10,6 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # NDVI output directory
 
 NDVI_DIR = BASE_DIR / "data" / "raw" / "ndvi"
+
 NDVI_DIR.mkdir(parents=True, exist_ok=True)
 
 # Add repository root to Python path
@@ -61,94 +65,39 @@ if __name__ == "__main__":
         .filterDate(START_DATE, END_DATE)
     )
 
-    # Convert the ImageCollection into a list
+    # Extract the SCL classification at the target location
 
-    sentinel2_list = sentinel2_location_date.toList(
-        sentinel2_location_date.size()
-    )
+    def add_target_scl(image):
 
-    # Print information about every Sentinel-2 scene
+        scl_value = image.select("SCL").reduceRegion(
+            reducer=ee.Reducer.first(),
+            geometry=location,
+            scale=20
+        ).get("SCL")
 
-    print("\nAll Sentinel-2 scenes:")
+        # Store the target-location SCL as an image property
 
-    for i in range(
-        sentinel2_location_date.size().getInfo()
-    ):
-
-        image = ee.Image(
-            sentinel2_list.get(i)
+        return image.set(
+            "target_SCL",
+            scl_value
         )
 
-        # Get image date
+    # Add target-location SCL to every Sentinel-2 image
 
-        date = image.date().format(
-            "YYYY-MM-dd"
-        ).getInfo()
-
-        # Get scene-level cloud percentage
-
-        cloud = image.get(
-            "CLOUDY_PIXEL_PERCENTAGE"
-        ).getInfo()
-
-        # Get unique Sentinel-2 image ID
-
-        image_id = image.id().getInfo()
-
-        print(
-            f"{date} | "
-            f"Cloud: {cloud:.2f}% | "
-            f"Image: {image_id}"
-        )
-
-    # Count images before cloud filtering
-
-    before_cloud_count = (
-        sentinel2_location_date
-        .size()
-        .getInfo()
+    sentinel2_with_scl = sentinel2_location_date.map(
+        add_target_scl
     )
 
-    # Filter images using scene-level cloud percentage
+    # Keep only vegetation (4) and bare soil (5)
 
-    sentinel2_filtered = (
-        sentinel2_location_date
-        .filter(
-            ee.Filter.lt(
-                "CLOUDY_PIXEL_PERCENTAGE",
-                20
-            )
+    sentinel2_scl_filtered = sentinel2_with_scl.filter(
+        ee.Filter.inList(
+            "target_SCL",
+            [4, 5]
         )
     )
 
-    # Count images after cloud filtering
-
-    after_cloud_count = (
-        sentinel2_filtered
-        .size()
-        .getInfo()
-    )
-
-    print(
-        f"Sentinel-2 images before cloud filtering: "
-        f"{before_cloud_count}"
-    )
-
-    print(
-        f"Sentinel-2 images after cloud filtering: "
-        f"{after_cloud_count}"
-    )
-
-    # Check how many images remain after filtering
-
-    image_count = sentinel2_filtered.size().getInfo()
-
-    print(
-        f"Sentinel-2 images after filtering: "
-        f"{image_count}"
-    )
-
-    # Calculate NDVI for each Sentinel-2 image
+    # Calculate NDVI for each usable Sentinel-2 image
 
     def calculate_ndvi(image):
 
@@ -179,13 +128,16 @@ if __name__ == "__main__":
                 "cloud_percentage": image.get(
                     "CLOUDY_PIXEL_PERCENTAGE"
                 ),
+                "SCL": image.get(
+                    "target_SCL"
+                ),
                 "image_id": image.id()
             }
         )
 
-    # Apply the NDVI calculation to every image
+    # Apply the NDVI calculation to every usable image
 
-    ndvi_features = sentinel2_filtered.map(
+    ndvi_features = sentinel2_scl_filtered.map(
         calculate_ndvi
     )
 
@@ -213,6 +165,7 @@ if __name__ == "__main__":
             "cloud_percentage": properties[
                 "cloud_percentage"
             ],
+            "SCL": properties["SCL"],
             "image_id": properties["image_id"]
         })
 
